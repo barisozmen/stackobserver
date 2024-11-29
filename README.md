@@ -39,6 +39,18 @@ Each Stack corresponds to a single CodeRegion
 One CodeRegion can correspond to multiple Stacks
 
 
+#### Intermediate Textual File Format
+start stack
+line
+line
+start stack
+line
+line
+line
+end stack
+end stack
+
+
 #### View
 example:
 ```html
