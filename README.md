@@ -41,6 +41,7 @@ One CodeRegion can correspond to multiple Stacks
 
 #### View
 example:
+```html
 <div id='<stack id>' class='stack' locals='' globals=''>
     <div class='line'>x=1</div>
     <div class='stack'>
@@ -48,3 +49,4 @@ example:
         <div class='line'>z=3</div>
     </div>
 </div>
+```
