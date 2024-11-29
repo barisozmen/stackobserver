@@ -43,10 +43,10 @@ One CodeRegion can correspond to multiple Stacks
 example:
 ```html
 <div id='<stack id>' class='stack' locals='' globals=''>
-    <div class='line'>x=1</div>
+    <div class='line' filename='' funcname=''>x=1</div>
     <div class='stack'>
-        <div class='line'>y=2</div>
-        <div class='line'>z=3</div>
+        <div class='line' filename='' funcname=''>y=2</div>
+        <div class='line' filename='' funcname=''>z=3</div>
     </div>
 </div>
 ```
