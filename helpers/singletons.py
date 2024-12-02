@@ -1,4 +1,4 @@
-from metaclasses import Singleton
+from helpers.metaclasses import Singleton
 
 class Counter(metaclass=Singleton):
     def __init__(self):

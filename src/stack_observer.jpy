@@ -1,0 +1,176 @@
+import sys
+import copy
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+
+
+import inspect
+import subprocess
+
+from collections import defaultdict
+
+from contextlib import ContextDecorator
+import linecache
+from pathlib import Path
+from helpers.singletons import Counter
+# https://docs.python.org/3/reference/datamodel.html#frame-objects
+# https://docs.python.org/3/reference/datamodel.html#code-objects 
+
+
+
+{% set my_list = ['f_lineno', 'f_locals', 'f_code.co_name', 'f_code.co_filename', 'f_code.co_stacksize', 'f_code.co_firstlineno'] %}
+
+
+# used by prepare_html.py as well, in order them to find the same file
+class PathDecider:
+    def __init__(self, file_path):
+        file_path = Path(file_path)
+        self.intermediate_path = file_path.parent / f'stackrecord.{file_path.stem}.intermediate.html'
+        self.last_html_path = file_path.parent / f'stackrecord.{file_path.stem}.html'
+
+def stack_key(frame):
+    return frame.f_code.co_filename.split('/')[-1] + ':' + str(frame.f_code.co_firstlineno) + ' ' + str(frame.f_code.co_name).replace('<', '&lt;').replace('>', ' &gt;')
+
+def make_stack_list(frame):
+    stack_list = []
+    frame_copy = frame
+    while frame_copy:
+        stack_list.append(stack_key(frame_copy))
+        frame_copy = frame_copy.f_back
+    return stack_list
+
+
+def parse_literal_locals(d):
+    literal_locals = ''
+    for k, v in d.items():
+        if isinstance(v, (int, float, str, bool)):
+            literal_locals += f'{k}={v} '
+        elif isinstance(v, (list, tuple, dict, set, frozenset)):
+            if len(v) < 10:
+                literal_locals += f'{k}={v} '
+            else:
+                literal_locals += f'{k}=<too long> '
+    return ' ' + literal_locals
+
+
+def get_code_content(frame):
+    filename = frame.f_code.co_filename
+    start_line = max(1, frame.f_code.co_firstlineno - 3)
+    end_line = frame.f_code.co_firstlineno + 70
+    
+    lines = linecache.getlines(filename)[start_line - 1:end_line]
+    code =  '\n'.join(f"{i}: {line.rstrip()}" 
+                    for i, line in enumerate(lines, start_line))
+
+    # escape html
+    {# code = code.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;').replace(' ', '&nbsp;') #}
+    # replace newlines with <br>
+    {# code = code.replace('\n', '<br>') #}
+    return code
+    
+
+class StackObserver(ContextDecorator):
+    def __init__(self):
+        self.inspected_file_path = inspect.currentframe().f_back.f_code.co_filename
+        self.output_path = PathDecider(self.inspected_file_path).intermediate_path
+        print('StackObserver initialized with output path >>', self.output_path)
+
+    def __enter__(self):
+        self.output_path.unlink(missing_ok=True)
+        trace_fn = self.trace_fn_factory(self.output_path)
+        sys.settrace(trace_fn)
+        {# sys.setprofile(trace_fn) #}
+        print('StackObserver entered, and set trace/profile with trace_fn >>', trace_fn)
+        return self
+
+    def __exit__(self, *exc):
+        sys.settrace(None)
+        {# sys.setprofile(None) #}
+        print('StackObserver completed')
+        # start the html prettifier
+        subprocess.run(['python', 'src/stack_html_prettifier.py', str(self.inspected_file_path)])
+        return False
+
+    def trace_fn_factory(self, output_path):
+        line_run_counter = defaultdict(int)
+
+        def trace_fn(frame, event, arg):
+            {# print('event->',event) 
+            print('arg->',arg,'\n') #}
+            def output(text):
+                output_path.open('a', encoding='utf-8').write(text + '\n')
+
+            # ignore pythons internal calls to c code
+            if event in ['c_call', 'c_return', 'c_exception']:
+                return None
+
+            if frame.f_code.co_filename.endswith('src/stack_observer.py'):
+                return None
+
+            
+            line_id = 'line_' + str(Counter().next_id)
+            line_key = str(frame.f_code.co_filename) + ':' + str(frame.f_lineno)
+            line_run_counter[line_key] += 1
+
+            stack_id = 'stack_' + str(Counter().next_id)
+
+            {# print('line_key', line_key)
+            print('event', event)
+            print('-'*100) #}
+
+            # get literal locals
+            literal_locals = parse_literal_locals(frame.f_locals)
+
+            if event == 'call':
+
+                stack_list = make_stack_list(frame)
+                stack_names = '\n'.join([x for x in stack_list])
+
+                output(f"""<div class="stack" id="{stack_id}" stack_key="{stack_key(frame)}" 
+                        {%- for item in my_list %}
+                            {{ item| replace('.', '_')}}="{frame.{{item}}}"
+                        {%- endfor %}
+                    >
+                    <div class='stack_header' line_run_counter="{line_run_counter[line_key]}">
+                        <div class='stack_header_element stack_key'>
+                            {stack_key(frame)}
+                            <div class='code_from_file' style="display: none;">
+                            <pre><code>{get_code_content(frame)}</code></pre>
+                            </div>
+                        </div>
+                        <div class='stack_header_element' stack_names="{stack_names}">
+                            STACK [{len(stack_list)}]
+                        </div>
+                        <div class='stack_header_element'>
+                            x{line_run_counter[line_key]}
+                        </div>
+                    </div>
+                    <div class="header line" id="{line_id}" line_key="{line_key}" f_code_co_filename="{frame.f_code.co_filename}" f_lineno="{frame.f_lineno}" f_locals="{frame.f_locals}" literal_locals="{literal_locals}" line_run_counter="{line_run_counter[line_key]}">
+                        <pre>{linecache.getline(frame.f_code.co_filename, frame.f_code.co_firstlineno).rstrip()}</pre>
+                    </div>
+                    """)
+
+            elif event == 'return':
+
+                output(f"""
+                <div class="return line" id="{line_id}" line_key="{line_key}" f_lineno="{frame.f_lineno}" f_locals="{frame.f_locals}" literal_locals="{literal_locals}" line_run_counter="{line_run_counter[line_key]}">
+                    return <pre>{str(arg)}</pre>
+                </div>
+                </div>""")
+
+            elif event == 'line':
+                output(f"""
+                <div class="line" id="{line_id}" line_key="{line_key}" f_code_co_filename="{frame.f_code.co_filename}" f_lineno="{frame.f_lineno}" f_locals="{frame.f_locals}" literal_locals="{literal_locals}" line_run_counter="{line_run_counter[line_key]}">
+                    <pre>{linecache.getline(frame.f_code.co_filename, frame.f_lineno).rstrip()}</pre>
+                </div>
+                """)
+
+            elif event == 'exception':
+                print('\n\nEXCEPTION EVENT!!\n')
+                print('arg->',arg)
+
+            else:
+                raise ValueError(f'Unknown event: {event}')
+
+            return trace_fn
+        return trace_fn
