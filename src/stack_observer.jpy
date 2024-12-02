@@ -28,8 +28,15 @@ class PathDecider:
         self.intermediate_path = file_path.parent / f'stackrecord.{file_path.stem}.intermediate.html'
         self.last_html_path = file_path.parent / f'stackrecord.{file_path.stem}.html'
 
+# Weird bugs happen when I don't escape html. For example, if we don't escape '<', then it will be interpreted as html tag and disrupt the html pattern, causing weird stack hierarchy.
+def escape_html(s):
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;')
+
 def stack_key(frame):
-    return frame.f_code.co_filename.split('/')[-1] + ':' + str(frame.f_code.co_firstlineno) + ' ' + str(frame.f_code.co_name).replace('<', '&lt;').replace('>', ' &gt;')
+    val = frame.f_code.co_filename.split('/')[-1] + ':' + str(frame.f_code.co_firstlineno) + ' ' + str(frame.f_code.co_name)
+    return escape_html(val)
+
+
 
 def make_stack_list(frame):
     stack_list = []
@@ -88,7 +95,7 @@ class StackObserver(ContextDecorator):
         {# sys.setprofile(None) #}
         print('StackObserver completed')
         # start the html prettifier
-        subprocess.run(['python', 'src/stack_html_prettifier.py', str(self.inspected_file_path)])
+        subprocess.run(['python3', 'src/stack_html_prettifier.py', str(self.inspected_file_path)], check=True)
         return False
 
     def trace_fn_factory(self, output_path):
@@ -113,6 +120,8 @@ class StackObserver(ContextDecorator):
             line_run_counter[line_key] += 1
 
             stack_id = 'stack_' + str(Counter().next_id)
+
+            
 
             {# print('line_key', line_key)
             print('event', event)
@@ -154,23 +163,24 @@ class StackObserver(ContextDecorator):
 
                 output(f"""
                 <div class="return line" id="{line_id}" line_key="{line_key}" f_lineno="{frame.f_lineno}" f_locals="{frame.f_locals}" literal_locals="{literal_locals}" line_run_counter="{line_run_counter[line_key]}">
-                    return <pre>{str(arg)}</pre>
+                    return <pre> {escape_html(str(arg))} </pre>
                 </div>
                 </div>""")
 
-            elif event == 'line':
+            elif event == 'line' or event == 'exception':
                 output(f"""
                 <div class="line" id="{line_id}" line_key="{line_key}" f_code_co_filename="{frame.f_code.co_filename}" f_lineno="{frame.f_lineno}" f_locals="{frame.f_locals}" literal_locals="{literal_locals}" line_run_counter="{line_run_counter[line_key]}">
                     <pre>{linecache.getline(frame.f_code.co_filename, frame.f_lineno).rstrip()}</pre>
                 </div>
                 """)
 
-            elif event == 'exception':
+            {# elif event == 'exception':
                 print('\n\nEXCEPTION EVENT!!\n')
-                print('arg->',arg)
+                print('arg->',arg) #}
 
             else:
-                raise ValueError(f'Unknown event: {event}')
+                print('Unknown event:', event)
+                {# raise ValueError(f'Unknown event: {event}') #}
 
             return trace_fn
         return trace_fn

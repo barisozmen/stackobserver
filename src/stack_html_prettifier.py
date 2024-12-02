@@ -11,11 +11,12 @@ from helpers.utils import count_unclosed_divs, render_html, ColorAssigner
 from helpers.metaclasses import Singleton
 
 from src.stack_observer import PathDecider
-from src.static import prettify_css, prettify_js
+from src.static import scrollbar_style
 
 
 
 DATA_TIPPY_CONTENT = 'data-tippy-content'
+UNEMPHASIZED_STACK_OPACITY = '0.2'
 
 
 # TODO: highlight the code line in code_from_file that shows the start of the corresponding stack.
@@ -132,7 +133,9 @@ def prettify_html(input_str):
         display: flex;
         flex-direction: column;
         align-items: left;
+        overflow-y: scroll;
     }
+    """+scrollbar_style+"""
     pre {
         width: 100%;
         display: flex;
@@ -160,7 +163,7 @@ def prettify_html(input_str):
         flex-direction: column;
         gap: 0.2em;
         //padding: 0.5em 0.5em 0.5em 0.5em;
-        padding-left: 0.5em; padding-top: 0.5em; padding-bottom: 0.5em;
+        padding-left: 0.7em; padding-top: 0.7em; padding-bottom: 0.7em;
         margin: 0.2em;
         margin-bottom: 0.4em;
         border-radius: 8px;
@@ -315,6 +318,7 @@ def prettify_html(input_str):
     });
     """
 
+    
     # Add stack click handler with jquery
     script += """
     $(document).ready(function () {
@@ -334,7 +338,7 @@ def prettify_html(input_str):
                     const stack_children = $(this).find('.stack');
                     
                     // make opacity 0.1 of all stack children
-                    stack_children.css('opacity', '0.2');
+                    stack_children.css('opacity', '"""+UNEMPHASIZED_STACK_OPACITY+"""');
                     
                     // keep id of the clicked stack on the window global variable
                     window.clicked_stack_id = $(this).attr('id');
