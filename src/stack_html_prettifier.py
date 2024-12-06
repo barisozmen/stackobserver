@@ -22,6 +22,7 @@ UNEMPHASIZED_STACK_OPACITY = '0.2'
 # TODO: highlight the code line in code_from_file that shows the start of the corresponding stack.
 # TODO: make the code_from_file scrollable up as well, and start the scroll top on the line that shows the start of the corresponding stack.
 
+# Use html2canvas to save the page as an image. Use it as snapshot of your code, and also for scroll preview.
 
 stack_styles = {}
 
