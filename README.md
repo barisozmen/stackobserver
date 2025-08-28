@@ -1,5 +1,8 @@
 # stackobserver
 
+<img width="683" height="1013" alt="image" src="https://github.com/user-attachments/assets/4f5752d9-fab4-44f9-bbcf-14d031cd4781" />
+
+
 ## Design
 Follow Unix philosophy:
 
